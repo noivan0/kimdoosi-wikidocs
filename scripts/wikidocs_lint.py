@@ -49,9 +49,11 @@ def lint_file(path: Path, tocs: dict[str, str]) -> list[str]:
     lines = raw.splitlines()
     rel = path.relative_to(ROOT)
     is_page = path.parent.name == "pages"
+    is_toc = path.name == "TOC.md"
 
     fence = False
     prev_line = ""
+    tip_open = 0
     for i, line in enumerate(lines, 1):
         stripped = line.strip()
 
@@ -83,6 +85,17 @@ def lint_file(path: Path, tocs: dict[str, str]) -> list[str]:
                 problems.append(f"{rel}:{i}: 이모지/화살표 문자 '{ch}' 사용 금지")
                 break
 
+        # TIP 블록
+        if stripped.startswith("[[TIP"):
+            if "[[/TIP]]" in stripped or re.match(r'^\[\[TIP\("[^"]*"\)\]\]\s*\S', stripped):
+                problems.append(f"{rel}:{i}: TIP은 여러 줄로 쓴다 ([[TIP(\"제목\")]] 와 [[/TIP]] 사이에 본문)")
+            else:
+                tip_open += 1
+        elif stripped.startswith("[[/TIP]]"):
+            tip_open -= 1
+        elif stripped.startswith("[[") and not stripped.startswith("[[TIP") and not stripped.startswith("[[/TIP"):
+            problems.append(f"{rel}:{i}: 위키독스가 인식하는 박스 키워드는 TIP 뿐이다 ({stripped[:20]})")
+
         # 4. 목록 앞 빈 줄
         if LIST_ITEM.match(line) and not LIST_ITEM.match(prev_line) \
                 and prev_line.strip() and not prev_line.strip().startswith((">", "|")):
@@ -90,7 +103,7 @@ def lint_file(path: Path, tocs: dict[str, str]) -> list[str]:
 
         # 5. 중첩 목록 들여쓰기
         lm = LIST_ITEM.match(line)
-        if lm:
+        if lm and not is_toc:
             indent = len(lm.group(1).expandtabs(4))
             if indent % 4 != 0:
                 problems.append(f"{rel}:{i}: 중첩 목록은 4칸 단위 (현재 {indent}칸)")
@@ -104,6 +117,9 @@ def lint_file(path: Path, tocs: dict[str, str]) -> list[str]:
 
     if fence:
         problems.append(f"{rel}: 코드 블록(```)이 닫히지 않음")
+
+    if tip_open:
+        problems.append(f"{rel}: TIP 블록이 닫히지 않음 ({tip_open}개)")
 
     # 9. TOC 제목과 본문 첫 제목 중복
     if is_page and str(rel / "") in tocs:

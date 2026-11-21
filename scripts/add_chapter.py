@@ -67,7 +67,8 @@ def main() -> int:
     PAGES.mkdir(exist_ok=True)
     dest.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
 
-    toc_lines = TOC.read_text(encoding="utf-8").splitlines()
+    original_toc = TOC.read_text(encoding="utf-8")
+    toc_lines = original_toc.splitlines()
     entry = f"- [{args.title}](pages/{name})"
     indent = ""
 
@@ -100,7 +101,9 @@ def main() -> int:
     lint = run([sys.executable, "scripts/wikidocs_lint.py"], check=False)
     print(lint.stdout.strip() or lint.stderr.strip())
     if lint.returncode != 0:
-        print("린트 실패. TOC.md 와 새 페이지를 고친 뒤 다시 실행하세요.")
+        dest.unlink(missing_ok=True)
+        TOC.write_text(original_toc, encoding="utf-8")
+        print("린트 실패. 원고를 고친 뒤 다시 실행하세요 (이번 변경은 되돌렸습니다).")
         return 1
 
     run(["git", "add", "pages", "TOC.md", "README.md", "assets"])
